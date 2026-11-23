@@ -28,4 +28,7 @@ assert.equal(g.ai_ok, false); assert.ok(g.issue_count >= 3); console.log("garbag
 const nda = readFileSync("/tmp/c1.txt", "utf8");
 const n = await code({ text: nda, ai: JSON.stringify({ counterparty: "Karoo Analytics", checks: [] }), filename: "01.pdf" });
 assert.equal(n.issue_count, 0); console.log("NDA rules-only ->", n.rating, n.issue_count);
+// AI failed first time, retry succeeded
+const rr = await code({ text, ai: null, ai_retry: { output: JSON.parse(ai) }, filename: "03.pdf" });
+assert.equal(rr.ai_ok, true); assert.equal(rr.ai_source, "AI (retried on Heavy tier)"); console.log("retry path ->", rr.ai_source);
 console.log("all review tests passed");

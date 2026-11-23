@@ -10,14 +10,19 @@ export const code = async (inputs: any) => {
   };
   let text: string = unwrap(inputs.text);
   if (typeof text !== 'string') text = JSON.stringify(text ?? '');
-  const raw = unwrap(inputs.ai);
-  let ai: any = raw;
-  if (typeof raw === 'string') {
-    const m = raw.match(/\{[\s\S]*\}/);
-    try { ai = JSON.parse(m ? m[0] : raw); } catch { ai = null; }
-  }
-  const aiOk = !!(ai && Array.isArray(ai.checks));
-  if (!aiOk) ai = { checks: [], summary: 'The AI review could not be read, so only the rule checks below were applied.' };
+  const parseAi = (v: any): any => {
+    const r = unwrap(v);
+    if (r && typeof r === 'object') return Array.isArray(r.checks) ? r : null;
+    if (typeof r !== 'string' || !r) return null;
+    const m = r.match(/\{[\s\S]*\}/);
+    try { const o = JSON.parse(m ? m[0] : r); return Array.isArray(o.checks) ? o : null; } catch { return null; }
+  };
+  // primary AI (Expert tier); if it failed, the flow retried on a stronger tier
+  let ai: any = parseAi(inputs.ai);
+  let aiSource = 'AI (Expert tier)';
+  if (!ai) { ai = parseAi(inputs.ai_retry); aiSource = 'AI (retried on Heavy tier)'; }
+  const aiOk = !!ai;
+  if (!aiOk) { ai = { checks: [], summary: 'The AI review was unavailable, so only the rule checks below were applied.' }; aiSource = 'Rule checks only (AI unavailable)'; }
 
   const norm = (s: string) => (s || '').toLowerCase().replace(/[‘’`]/g, "'").replace(/[“”]/g, '"')
     .replace(/[–—]/g, '-').replace(/\s+/g, ' ').trim();
@@ -106,7 +111,7 @@ export const code = async (inputs: any) => {
   ${okList ? `<p style="font-size:12px;color:#6b7280;margin-top:12px">Meets the playbook: ${okList}</p>` : ''}
   ${notes.length || unverified.length || !aiOk ? `<p style="font-size:12px;color:#b91c1c">Checks: ${[!aiOk ? 'AI review unreadable' : '', ...notes, unverified.length ? `${unverified.length} AI quote(s) could not be found in the contract, so treat those findings with care` : ''].filter(Boolean).map(e).join(' ')}</p>` : '<p style="font-size:12px;color:#15803d">All AI quotes were verified against the contract text.</p>'}
   <p style="margin-top:16px"><b>Approve</b> files the contract in Google Drive and logs it in the register. <b>Disapprove</b> logs it and drafts a reply to the sender with the requested changes, for you to review before sending.</p>
-  <p style="font-size:11px;color:#9ca3af">Automated first-pass review against a demonstration playbook. Not legal advice.</p></div>`;
+  <p style="font-size:11px;color:#9ca3af">Reviewed by: ${e(aiSource)} + code verification. Automated first-pass review against a demonstration playbook. Not legal advice.</p></div>`;
 
   // 5) draft reply to the counterparty (only used if disapproved)
   const asks = issues.filter((c: any) => c.ask).map((c: any, i: number) => `<li><b>${NAMES[c.rule]}</b> (clause: "${e((c.quote || 'missing').slice(0, 120))}"): ${e(c.ask)}</li>`).join('');
@@ -121,7 +126,7 @@ export const code = async (inputs: any) => {
     effective_date: ai.effective_date || '', term: ai.term || '', renewal: ai.renewal || '', governing_law: ai.governing_law || '',
     summary: ai.summary || '', top_issues: issues.slice(0, 3).map((c: any) => `${c.severity}: ${NAMES[c.rule]}`).join('; '),
     quotes_verified: `${checks.filter((c: any) => c.quote && c.quote_verified).length}/${checks.filter((c: any) => c.quote).length}`,
-    ai_ok: aiOk, notes,
+    ai_ok: aiOk, ai_source: aiSource, notes,
     subject: `[Contract review] ${safe(ai.counterparty)}: ${rating} risk, ${recommendation}`,
     html, draft_html: draft,
     drive_name: `${today} ${safe(ai.counterparty)} - ${safe(ai.contract_type)}.pdf`,
