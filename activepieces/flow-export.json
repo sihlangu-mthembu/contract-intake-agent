@@ -1,0 +1,340 @@
+{
+ "displayName": "Contract Intake Agent",
+ "note": "Structure of the live Activepieces flow. Connections, folder and sheet IDs replaced with placeholders.",
+ "trigger": {
+  "name": "trigger",
+  "type": "PIECE_TRIGGER",
+  "displayName": "New contract (PDF) emailed to +contracts",
+  "settings": {
+   "pieceName": "@activepieces/piece-gmail",
+   "pieceVersion": "0.19.0",
+   "triggerName": "new_attachment",
+   "input": {
+    "auth": "{{connections['YOUR_CONNECTION']}}",
+    "to": "you+contracts@gmail.com",
+    "filenameExtension": "pdf"
+   }
+  },
+  "nextAction": {
+   "name": "step_1",
+   "type": "PIECE",
+   "displayName": "Extract contract text",
+   "settings": {
+    "pieceName": "@activepieces/piece-pdf",
+    "pieceVersion": "0.8.1",
+    "actionName": "extractText",
+    "input": {
+     "file": "{{trigger.output.attachment.data}}"
+    }
+   },
+   "nextAction": {
+    "name": "step_2",
+    "type": "PIECE",
+    "displayName": "AI review against SA playbook (structured)",
+    "settings": {
+     "pieceName": "@activepieces/piece-ai",
+     "pieceVersion": "0.16.0",
+     "actionName": "extractStructuredData",
+     "errorHandlingOptions": {
+      "continueOnFailure": {
+       "value": true
+      },
+      "retryOnFailure": {
+       "value": true
+      }
+     },
+     "input": {
+      "aiProviderModel": {
+       "provider": "activepieces",
+       "model": "smart"
+      },
+      "text": "{{step_1.output}}",
+      "files": [],
+      "prompt": "(see ai-extract-prompt.txt)",
+      "mode": "advanced",
+      "schema": {
+       "fields": "(see ai-output-schema.json)"
+      },
+      "maxOutputTokens": 8000
+     }
+    },
+    "nextAction": {
+     "name": "step_10",
+     "type": "ROUTER",
+     "displayName": "Did the AI answer?",
+     "settings": {
+      "executionType": "EXECUTE_FIRST_MATCH",
+      "branches": [
+       {
+        "branchName": "No: retry on Heavy tier",
+        "branchType": "CONDITION",
+        "conditions": [
+         [
+          {
+           "operator": "DOES_NOT_EXIST",
+           "firstValue": "{{step_2.output}}"
+          }
+         ]
+        ]
+       },
+       {
+        "branchName": "Yes",
+        "branchType": "FALLBACK"
+       }
+      ]
+     },
+     "children": [
+      {
+       "name": "step_11",
+       "type": "PIECE",
+       "displayName": "AI review retry (Heavy tier)",
+       "settings": {
+        "pieceName": "@activepieces/piece-ai",
+        "pieceVersion": "0.16.0",
+        "actionName": "extractStructuredData",
+        "errorHandlingOptions": {
+         "continueOnFailure": {
+          "value": true
+         },
+         "retryOnFailure": {
+          "value": true
+         }
+        },
+        "input": {
+         "aiProviderModel": {
+          "provider": "activepieces",
+          "model": "premium"
+         },
+         "text": "{{step_1.output}}",
+         "files": [],
+         "prompt": "(see ai-extract-prompt.txt)",
+         "mode": "advanced",
+         "schema": {
+          "fields": "(see ai-output-schema.json)"
+         },
+         "maxOutputTokens": 8000
+        }
+       }
+      },
+      null
+     ],
+     "nextAction": {
+      "name": "step_3",
+      "type": "CODE",
+      "displayName": "Verify quotes, rule checks, risk score",
+      "settings": {
+       "input": {
+        "text": "{{step_1.output}}",
+        "ai": "{{step_2.output}}",
+        "ai_retry": "{{step_11.output}}",
+        "filename": "{{trigger.output.attachment.fileName}}",
+        "subject": "{{trigger.output.message.subject}}"
+       },
+       "sourceCode": {
+        "code": "(see review.ts)",
+        "packageJson": "{}"
+       }
+      },
+      "nextAction": {
+       "name": "step_4",
+       "type": "PIECE",
+       "displayName": "Email review and wait for approval",
+       "settings": {
+        "pieceName": "@activepieces/piece-gmail",
+        "pieceVersion": "0.19.0",
+        "actionName": "request_approval_in_mail",
+        "errorHandlingOptions": {
+         "continueOnFailure": {
+          "value": false
+         },
+         "retryOnFailure": {
+          "value": false
+         }
+        },
+        "input": {
+         "auth": "{{connections['YOUR_CONNECTION']}}",
+         "receiver": "you@example.com",
+         "subject": "{{step_3.output.subject}}",
+         "body_type": "html",
+         "body": "{{step_3.output.html}}",
+         "sender_name": "Contract Intake Agent",
+         "attachments": [
+          {
+           "file": "{{trigger.output.attachment.data}}",
+           "name": "{{trigger.output.attachment.fileName}}"
+          }
+         ]
+        }
+       },
+       "nextAction": {
+        "name": "step_5",
+        "type": "ROUTER",
+        "displayName": "Approved?",
+        "settings": {
+         "executionType": "EXECUTE_FIRST_MATCH",
+         "branches": [
+          {
+           "branchName": "Approved",
+           "branchType": "CONDITION",
+           "conditions": [
+            [
+             {
+              "operator": "BOOLEAN_IS_TRUE",
+              "firstValue": "{{step_4.output.approved}}"
+             }
+            ]
+           ]
+          },
+          {
+           "branchName": "Disapproved",
+           "branchType": "FALLBACK"
+          }
+         ]
+        },
+        "children": [
+         {
+          "name": "step_7",
+          "type": "PIECE",
+          "displayName": "File contract in Drive",
+          "settings": {
+           "pieceName": "@activepieces/piece-google-drive",
+           "pieceVersion": "0.14.1",
+           "actionName": "upload_gdrive_file",
+           "errorHandlingOptions": {
+            "continueOnFailure": {
+             "value": false
+            },
+            "retryOnFailure": {
+             "value": true
+            }
+           },
+           "input": {
+            "auth": "{{connections['YOUR_CONNECTION']}}",
+            "fileName": "{{step_3.output.drive_name}}",
+            "file": "{{trigger.output.attachment.data}}",
+            "parentFolder": "YOUR_DRIVE_FOLDER_ID"
+           }
+          },
+          "nextAction": {
+           "name": "step_8",
+           "type": "PIECE",
+           "displayName": "Log approval in register",
+           "settings": {
+            "pieceName": "@activepieces/piece-google-sheets",
+            "pieceVersion": "0.21.0",
+            "actionName": "insert_row",
+            "errorHandlingOptions": {
+             "continueOnFailure": {
+              "value": false
+             },
+             "retryOnFailure": {
+              "value": true
+             }
+            },
+            "input": {
+             "auth": "{{connections['YOUR_CONNECTION']}}",
+             "spreadsheetId": "YOUR_SHEET_ID",
+             "sheetId": 0,
+             "first_row_headers": false,
+             "as_string": true,
+             "values": {
+              "values": [
+               "{{step_3.output.received}}",
+               "{{step_3.output.counterparty}}",
+               "{{step_3.output.contract_type}}",
+               "{{step_3.output.rating}}",
+               "{{step_3.output.score}}",
+               "{{step_3.output.recommendation}}",
+               "{{step_3.output.top_issues}}",
+               "{{step_3.output.governing_law}}",
+               "{{step_3.output.term}}",
+               "{{step_3.output.renewal}}",
+               "Approved",
+               "https://drive.google.com/file/d/{{step_7.output.id}}/view",
+               "{{step_3.output.quotes_verified}}",
+               "{{trigger.output.message.subject}}"
+              ]
+             }
+            }
+           }
+          }
+         },
+         {
+          "name": "step_6",
+          "type": "PIECE",
+          "displayName": "Draft reply with requested changes",
+          "settings": {
+           "pieceName": "@activepieces/piece-gmail",
+           "pieceVersion": "0.19.0",
+           "actionName": "create_draft_reply",
+           "errorHandlingOptions": {
+            "continueOnFailure": {
+             "value": false
+            },
+            "retryOnFailure": {
+             "value": false
+            }
+           },
+           "input": {
+            "auth": "{{connections['YOUR_CONNECTION']}}",
+            "message_id": "{{trigger.output.message.id}}",
+            "reply_type": "reply",
+            "body_type": "html",
+            "body": "{{step_3.output.draft_html}}",
+            "include_original_message": true,
+            "sender_name": "Mthembu Advisory"
+           }
+          },
+          "nextAction": {
+           "name": "step_9",
+           "type": "PIECE",
+           "displayName": "Log changes requested in register",
+           "settings": {
+            "pieceName": "@activepieces/piece-google-sheets",
+            "pieceVersion": "0.21.0",
+            "actionName": "insert_row",
+            "errorHandlingOptions": {
+             "continueOnFailure": {
+              "value": false
+             },
+             "retryOnFailure": {
+              "value": true
+             }
+            },
+            "input": {
+             "auth": "{{connections['YOUR_CONNECTION']}}",
+             "spreadsheetId": "YOUR_SHEET_ID",
+             "sheetId": 0,
+             "first_row_headers": false,
+             "as_string": true,
+             "values": {
+              "values": [
+               "{{step_3.output.received}}",
+               "{{step_3.output.counterparty}}",
+               "{{step_3.output.contract_type}}",
+               "{{step_3.output.rating}}",
+               "{{step_3.output.score}}",
+               "{{step_3.output.recommendation}}",
+               "{{step_3.output.top_issues}}",
+               "{{step_3.output.governing_law}}",
+               "{{step_3.output.term}}",
+               "{{step_3.output.renewal}}",
+               "Changes requested (draft reply in Gmail)",
+               "",
+               "{{step_3.output.quotes_verified}}",
+               "{{trigger.output.message.subject}}"
+              ]
+             }
+            }
+           }
+          }
+         }
+        ]
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}
