@@ -31,8 +31,8 @@ JSON FORMAT
  "summary": "2-3 plain-English sentences for a busy partner",
  "checks": [{"rule": "R1", "status": "OK|ISSUE|MISSING|N/A", "severity": "HIGH|MEDIUM|LOW|", "finding": "max 25 words", "quote": "", "ask": ""}]}
 
-EMAIL SUBJECT: {{trigger.subject}}
-FILE NAME: {{trigger.attachment.filename}}
+EMAIL SUBJECT: {{trigger.output.message.subject}}
+FILE NAME: {{trigger.output.attachment.fileName}}
 
 CONTRACT TEXT
-{{step_1}}
+{{step_1.output}}
