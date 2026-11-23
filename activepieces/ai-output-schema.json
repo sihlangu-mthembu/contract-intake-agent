@@ -1,0 +1,138 @@
+{
+ "type": "object",
+ "properties": {
+  "contract_type": {
+   "type": "string",
+   "description": "e.g. Mutual NDA, SaaS subscription agreement"
+  },
+  "title": {
+   "type": "string"
+  },
+  "counterparty": {
+   "type": "string",
+   "description": "the other party's full name (not Mthembu Advisory)"
+  },
+  "parties": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "role": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "role"
+    ]
+   }
+  },
+  "effective_date": {
+   "type": "string"
+  },
+  "term": {
+   "type": "string"
+  },
+  "renewal": {
+   "type": "string"
+  },
+  "termination": {
+   "type": "string"
+  },
+  "payment_terms": {
+   "type": "string"
+  },
+  "fees_or_value": {
+   "type": "string"
+  },
+  "governing_law": {
+   "type": "string"
+  },
+  "personal_information_processed": {
+   "type": "boolean"
+  },
+  "summary": {
+   "type": "string",
+   "description": "2-3 plain-English sentences for a busy partner"
+  },
+  "checks": {
+   "type": "array",
+   "description": "one entry for each rule R1 to R12",
+   "items": {
+    "type": "object",
+    "properties": {
+     "rule": {
+      "type": "string",
+      "enum": [
+       "R1",
+       "R2",
+       "R3",
+       "R4",
+       "R5",
+       "R6",
+       "R7",
+       "R8",
+       "R9",
+       "R10",
+       "R11",
+       "R12"
+      ]
+     },
+     "status": {
+      "type": "string",
+      "enum": [
+       "OK",
+       "ISSUE",
+       "MISSING",
+       "N/A"
+      ]
+     },
+     "severity": {
+      "type": "string",
+      "enum": [
+       "HIGH",
+       "MEDIUM",
+       "LOW",
+       ""
+      ]
+     },
+     "finding": {
+      "type": "string",
+      "description": "max 25 words"
+     },
+     "quote": {
+      "type": "string",
+      "description": "copied word for word from the contract, max 40 words; empty if the clause is missing"
+     },
+     "ask": {
+      "type": "string",
+      "description": "the change to request from the counterparty; empty if OK"
+     }
+    },
+    "required": [
+     "rule",
+     "status",
+     "severity",
+     "finding",
+     "quote",
+     "ask"
+    ]
+   }
+  }
+ },
+ "required": [
+  "contract_type",
+  "title",
+  "counterparty",
+  "governing_law",
+  "personal_information_processed",
+  "summary",
+  "checks",
+  "term",
+  "renewal",
+  "effective_date"
+ ]
+}
